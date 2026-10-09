@@ -18,7 +18,7 @@ No orders are sent. There are no API keys.
 Python 3.10+ (3.12/3.14 is fine).
 
 ```bash
-git clone https://github.com/REPLACE_OWNER/paper-arb-scanner.git
+git clone https://github.com/NeroFrm6/paper-arb-scanner.git
 cd paper-arb-scanner
 python -m pip install -r requirements.txt
 copy config.example.json config.json   # Windows
