@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ARB</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --ink: var(--foreground, CanvasText);
+    --muted: var(--muted-foreground, GrayText);
+    --accent: var(--accent, Highlight);
+    --line: var(--border, GrayText);
+    --surface: var(--card, Canvas);
+    --good: light-dark(#1a7f37, #3fb950);
+    --bad: light-dark(#cf222e, #ff7b72);
+    --warn: light-dark(#9a6700, #d29922);
+    --fill: color-mix(in srgb, var(--ink) 5%, transparent);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; background: var(--surface); color: var(--ink); font: 15px/1.45 "Segoe UI", system-ui, sans-serif; }
+  body { padding: 24px 28px 40px; width: 100%; min-height: 100vh; max-width: none; }
+  button { font: inherit; color: inherit; cursor: pointer; background: transparent; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; }
+  .live { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+  .mark { color: var(--ink); font-weight: 700; letter-spacing: 0.08em; font-size: 13px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.on { background: var(--good); }
+  .modes { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .modes button { padding: 7px 12px; color: var(--muted); }
+  .modes button.on { background: var(--fill); color: var(--ink); }
+  .verdict { margin: 0 0 14px; font-size: 22px; font-weight: 620; letter-spacing: -0.02em; line-height: 1.3; text-wrap: pretty; }
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 22px; }
+  .step { border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: var(--fill); }
+  .step span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+  .step b { font-size: 15px; }
+  h2 { margin: 22px 0 8px; font-size: 13px; color: var(--muted); font-weight: 650; }
+  #list { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
+  .card { border: 1px solid var(--line); border-radius: 10px; padding: 14px; background: var(--fill); }
+  .card h3 { margin: 0; font-size: 17px; }
+  .route { margin: 3px 0 8px; color: var(--muted); }
+  .facts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .fact { background: var(--fill); border-radius: 8px; padding: 8px 10px; }
+  .fact span { display: block; color: var(--muted); font-size: 11px; margin-bottom: 2px; }
+  .fact b { font-variant-numeric: tabular-nums; font-weight: 650; }
+  .mean { margin: 8px 0 0; font-size: 14px; }
+  .pos { color: var(--good); } .neg { color: var(--bad); } .amb { color: var(--warn); }
+  .more, .big p { color: var(--muted); }
+  .more { border: 0; padding: 8px 0; color: var(--accent); }
+  .big-row { display: grid; grid-template-columns: 1.2fr 1.4fr 1fr 1fr; gap: 8px; padding: 8px 0; border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent); font-size: 14px; }
+  .big-row span:nth-child(2) { color: var(--muted); }
+  .foot { margin-top: 22px; color: var(--muted); font-size: 13px; }
+  .hermes { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 18px; background: var(--fill); }
+  .hermes-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .hermes p { margin: 8px 0 0; font-size: 16px; }
+  .hermes ul { margin: 8px 0 0; padding-left: 18px; color: var(--muted); }
+  .hermes li { margin: 4px 0; }
+  .recs { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-bottom: 18px; }
+  .rec { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; background: var(--fill); min-width: 0; }
+  .rec .rank { color: var(--muted); font-size: 12px; }
+  .rec .name { margin-top: 4px; font-size: 18px; font-weight: 650; }
+  .rec .route { margin: 2px 0 8px; }
+  .rec .left { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .rec .note { margin-top: 6px; color: var(--muted); font-size: 13px; }
+  .stats { display: grid; grid-template-columns: 1.2fr .7fr 1.1fr; gap: 8px; margin-bottom: 12px; }
+  .panel { border: 1px solid var(--line); border-radius: 10px; background: var(--fill); padding: 12px; }
+  .k { color: var(--muted); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .v { margin-top: 4px; font-size: 20px; font-variant-numeric: tabular-nums; }
+  .layout { display: grid; grid-template-columns: minmax(0,1fr) 230px; gap: 10px; }
+  .tabs { display: flex; gap: 4px; }
+  .tabs button { border: 0; background: transparent; color: var(--muted); padding: 4px 8px; border-radius: 6px; }
+  .tabs button.on { background: var(--fill); color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid color-mix(in srgb, var(--line) 65%, transparent); }
+  th { color: var(--muted); font-weight: 600; }
+  .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .log { font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: var(--muted); max-height: 180px; overflow: auto; }
+  .ex { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 3px 0; }
+  .bar { flex: 1; height: 3px; background: var(--fill); border-radius: 99px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--accent); }
+  .spark { width: 100%; height: 36px; }
+  .badge { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; border: 1px solid var(--line); border-radius: 99px; padding: 1px 6px; color: var(--muted); }
+  body.beginner .only-adv { display: none; }
+  body.advanced .only-beg { display: none; }
+  @media (max-width: 760px) {
+    .steps, .facts, .stats, .layout, .big-row, #list, .recs { display: block; }
+    .fact, .panel { margin-bottom: 8px; }
+  }
+</style>
+</head>
+<body class="beginner">
+  <header class="top">
+    <div class="live"><span class="mark">ARB</span><span id="dot" class="dot"></span><span id="mode">starting</span></div>
+    <div class="modes">
+      <button id="btnBeg" class="on" type="button">Simple</button>
+      <button id="btnAdv" type="button">All the numbers</button>
+    </div>
+  </header>
+  <section class="hermes" id="hermes">
+    <div class="hermes-top"><strong>Hermes</strong><span id="hermesCall">waiting</span></div>
+    <p id="hermesSummary">Hermes has not reviewed this yet.</p>
+    <ul id="hermesSkips"></ul>
+  </section>
+  <section class="recs" id="recs" aria-label="Best chances"></section>
+
+  <div class="only-beg">
+    <p class="verdict" id="verdict">Looking at prices.</p>
+    <div class="steps">
+      <div class="step"><span>1. Buy</span><b id="flowBuy">where it is cheaper</b></div>
+      <div class="step"><span>2. Fee</span><b>Comes off both trades</b></div>
+      <div class="step"><span>3. Sell</span><b id="flowSell">where the bid is higher</b></div>
+    </div>
+    <h2>What we found <span id="scanAge"></span></h2>
+    <div id="list"></div>
+    <button id="more" class="more" type="button" hidden>Show more</button>
+    <h2>Coins you already know</h2>
+    <div id="big"></div>
+    <p class="foot">No money is moved. A difference that stays open usually means you cannot send the coin from one exchange to the other. “All the numbers” is the same data, without the plain labels.</p>
+  </div>
+
+  <div class="only-adv">
+    <div class="stats">
+      <div class="panel"><div class="k">Best checked difference</div><div class="v" id="bestNet">—</div><div class="s" id="bestRoute">waiting</div></div>
+      <div class="panel"><div class="k">Open signals</div><div class="v" id="openN">0</div><div class="s" id="openS">confirmed twice</div></div>
+      <div class="panel"><div class="k">Last hour</div><svg id="spark" class="spark" viewBox="0 0 280 46" preserveAspectRatio="none"></svg></div>
+    </div>
+    <div class="layout">
+      <div class="panel">
+        <div class="top" style="margin:0 0 8px">
+          <strong>Every edge</strong>
+          <div class="tabs">
+            <button id="tabT" class="on" type="button">Trusted</button>
+            <button id="tabO" type="button">Other</button>
+            <button id="tabM" type="button">Big coins</button>
+          </div>
+        </div>
+        <div id="table"></div>
+      </div>
+      <div>
+        <div class="panel" style="margin-bottom:8px"><div class="k">Exchanges</div><div id="venues"></div></div>
+        <div class="panel"><div class="k">Scan log</div><div class="log" id="log"></div></div>
+      </div>
+    </div>
+    <p class="foot" id="note"></p>
+  </div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const NAMES = { binance:"Binance", bybit:"Bybit", okx:"OKX", kucoin:"KuCoin", bitget:"Bitget", kraken:"Kraken", mexc:"MEXC", gate:"Gate" };
+const COINS = { BTC:"Bitcoin", ETH:"Ethereum", SOL:"Solana", XRP:"XRP", DOGE:"Dogecoin", LINK:"Chainlink", ZIL:"Zilliqa" };
+let tab = "trusted", last = null, showAll = false;
+$("btnBeg").onclick = () => setMode("beginner");
+$("btnAdv").onclick = () => setMode("advanced");
+$("tabT").onclick = () => { tab = "trusted"; paintAdv(); };
+$("tabO").onclick = () => { tab = "other"; paintAdv(); };
+$("tabM").onclick = () => { tab = "majors"; paintAdv(); };
+$("more").onclick = () => { showAll = !showAll; paintBeg(); };
+function setMode(next) {
+  document.body.className = next;
+  $("btnBeg").classList.toggle("on", next === "beginner");
+  $("btnAdv").classList.toggle("on", next === "advanced");
+}
+function nice(n) { return NAMES[n] || n; }
+function coin(pair) { const b = String(pair || "").split("/")[0]; return COINS[b] || b; }
+function pct(x) {
+  if (x == null || Number.isNaN(Number(x))) return "—";
+  const n = x * 100;
+  return (n > 0 ? "+" : "") + n.toFixed(2) + "%";
+}
+function cls(x) { if (x == null) return ""; if (x >= 0.0015) return "pos"; if (x > 0) return "amb"; return "neg"; }
+function dur(s) {
+  if (s == null) return "—";
+  if (s < 60) return s + " sec";
+  return Math.floor(s / 60) + " min";
+}
+function esc(s) { return String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c])); }
+function age(ts) {
+  if (!ts) return "";
+  const s = Math.max(0, Date.now() / 1000 - ts);
+  return s < 90 ? " · checked " + Math.round(s) + "s ago" : " · checked " + Math.round(s / 60) + "m ago";
+}
+function mean(r) {
+  if (r.sticky) return "This difference has stayed open for " + dur(r.open_for_s) + ". You probably cannot send the coin from one exchange to the other.";
+  if (r.signal) return "We checked the live prices twice. They still show this. That does not mean you can send the coin across.";
+  if (r.book_net == null) return "We have the listed prices, but we have not double-checked the live order book yet.";
+  if (r.book_net <= 0) return "The difference was gone when we checked the live prices.";
+  if ((r.reason || "").indexOf("already used") >= 0) return "A better row above already uses these same coins.";
+  if (r.net <= 0) return "The fee is bigger than the price difference. No trade.";
+  return "Watching. Not strong enough to treat as a real chance yet.";
+}
+function facts(r) {
+  return `<div class="facts">
+    <div class="fact"><span>Price difference</span><b class="${cls(r.gross)}">${pct(r.gross)}</b></div>
+    <div class="fact"><span>Left after the fee</span><b class="${cls(r.net)}">${pct(r.net)}</b></div>
+    <div class="fact"><span>Checked live</span><b class="${cls(r.book_net)}">${pct(r.book_net)}</b></div>
+    <div class="fact"><span>Open for</span><b>${dur(r.open_for_s)}</b></div>
+  </div>`;
+}
+function paintBeg() {
+  if (!last) return;
+  const rows = last.trusted || [];
+  const hit = (last.episodes && last.episodes[0]) || rows.find((r) => (r.book_net != null ? r.book_net : r.net) > 0);
+  if (!last.scan_count) $("verdict").textContent = "Looking at prices.";
+  else if (!hit) $("verdict").textContent = "Nothing beats the fee right now.";
+  else $("verdict").textContent = coin(hit.pair) + " is cheaper on " + nice(hit.buy) + " than on " + nice(hit.sell) + ". After the fee, " + pct(hit.book_net != null ? hit.book_net : hit.net) + " is left.";
+  $("flowBuy").textContent = hit ? nice(hit.buy) : "where it is cheaper";
+  $("flowSell").textContent = hit ? nice(hit.sell) : "where the bid is higher";
+  const shown = showAll ? rows : rows.slice(0, 5);
+  $("list").innerHTML = shown.map((r) => `<article class="card"><h3>${esc(coin(r.pair))}</h3><p class="route">Buy on ${esc(nice(r.buy))}. Sell on ${esc(nice(r.sell))}.</p>${facts(r)}<p class="mean">${esc(mean(r))}</p></article>`).join("") || "<p class='route'>No difference on the trusted exchanges right now.</p>";
+  $("more").hidden = rows.length <= 5;
+  $("more").textContent = showAll ? "Show less" : "Show " + (rows.length - 5) + " more";
+  $("scanAge").textContent = age(last.last_scan_at);
+  $("big").innerHTML = (last.majors || []).map((r) => `<div class="big-row"><b>${esc(coin(r.pair))}</b><span>${esc(nice(r.buy))} → ${esc(nice(r.sell))}</span><span class="${cls(r.gross)}">difference ${pct(r.gross)}</span><span class="${cls(r.net)}">after fee ${pct(r.net)}</span></div>`).join("");
+}
+function advTable(rows, majors) {
+  if (!rows.length) return "<p class='route'>Nothing on this tab.</p>";
+  if (majors) return `<table><tr><th>Pair</th><th>Buy</th><th>Sell</th><th>Difference</th><th>After fee</th><th>What it means</th></tr>${rows.map((r) => `<tr><td>${esc(r.pair)}</td><td>${esc(r.buy)}</td><td>${esc(r.sell)}</td><td class="num ${cls(r.gross)}">${pct(r.gross)}</td><td class="num ${cls(r.net)}">${pct(r.net)}</td><td>${esc(r.reason || "")}</td></tr>`).join("")}</table>`;
+  return `<table><tr><th>Pair</th><th>Route</th><th>Difference</th><th>After fee</th><th>Checked live</th><th>Open</th><th>Status</th></tr>${rows.map((r) => {
+    const status = r.sticky ? "stuck" : r.signal ? "possible" : r.book_net == null ? "not checked" : r.book_net > 0 ? "watching" : "gone";
+    return `<tr><td>${esc(r.pair)}</td><td>${esc(r.buy)} → ${esc(r.sell)}</td><td class="num ${cls(r.gross)}">${pct(r.gross)}</td><td class="num ${cls(r.net)}">${pct(r.net)}</td><td class="num ${cls(r.book_net)}">${pct(r.book_net)}</td><td class="num">${dur(r.open_for_s)}</td><td>${status}</td></tr>`;
+  }).join("")}</table>`;
+}
+function spark(hist) {
+  const svg = $("spark"), vals = (hist || []).map((p) => p.net);
+  if (vals.length < 2) { svg.innerHTML = ""; return; }
+  const w = 280, h = 46, pad = 2, min = Math.min(...vals, 0), max = Math.max(...vals, 0), span = (max - min) || 1;
+  const pts = vals.map((v, i) => (pad + i / (vals.length - 1) * (w - pad * 2)).toFixed(1) + " " + (h - pad - (v - min) / span * (h - pad * 2)).toFixed(1));
+  svg.innerHTML = `<path d="M${pts.join(" L")}" fill="none" stroke="var(--accent)" stroke-width="1.5"/>`;
+}
+function paintAdv() {
+  if (!last) return;
+  ["tabT","tabO","tabM"].forEach((id, i) => $(id).classList.toggle("on", ["trusted","other","majors"][i] === tab));
+  const rows = tab === "other" ? last.other : tab === "majors" ? last.majors : last.trusted;
+  $("table").innerHTML = advTable(rows || [], tab === "majors");
+  const best = last.best_book;
+  $("bestNet").textContent = best ? pct(best.book_net) : "—";
+  $("bestNet").className = "v " + (best ? cls(best.book_net) : "");
+  $("bestRoute").textContent = best ? coin(best.pair) + " · " + nice(best.buy) + " → " + nice(best.sell) : "waiting";
+  $("openN").textContent = String((last.episodes || []).length);
+  $("openS").textContent = (last.episodes || []).some((e) => e.sticky) ? "one has stayed open" : "checked twice";
+  spark(last.best_net_history);
+  $("venues").innerHTML = (last.venues || []).map((v) => `<div class="ex"><span>${esc(nice(v.name))}</span><div class="bar"><i style="width:${Math.max(8, Math.min(100, (v.ms || 0) / 80))}%"></i></div><span>${v.ok ? v.ms + " ms" : "down"}</span></div>`).join("");
+  $("log").innerHTML = (last.log || []).map((l) => `<div>${esc(String(l).replace(/\$[\d,]+(?:\.\d+)?/g, ""))}</div>`).join("");
+  $("note").textContent = last.note || "";
+}
+function bestChances(rows) {
+  const ranked = (rows || []).filter((r) => {
+    const left = r.book_net != null ? r.book_net : r.net;
+    return left != null && left > 0 && r.trusted !== false;
+  }).sort((a, b) => (b.book_net != null ? b.book_net : b.net) - (a.book_net != null ? a.book_net : a.net));
+  const usedSell = new Set();
+  const usedBuy = new Set();
+  const out = [];
+  for (const row of ranked) {
+    const sell = row.pair + "|" + row.sell;
+    const buy = row.pair + "|" + row.buy;
+    if (usedSell.has(sell) || usedBuy.has(buy)) continue;
+    usedSell.add(sell);
+    usedBuy.add(buy);
+    out.push(row);
+    if (out.length === 3) break;
+  }
+  return out;
+}
+function paintRecs() {
+  const picks = last.recommendations || [];
+  const numbers = last.best_numbers || [];
+  const chance = picks.length
+    ? picks.map((r, i) => {
+        const left = r.book_net != null ? r.book_net : r.net;
+        return `<article class="rec"><div class="rank">Best chance ${i + 1}</div><div class="name">${esc(coin(r.pair))}</div><p class="route">Buy ${esc(nice(r.buy))}. Sell ${esc(nice(r.sell))}.</p><div class="left ${cls(left)}">${pct(left)} left</div><p class="note">${esc(r.reason || "Same coin, can move, paper inventory could take it.")}</p></article>`;
+      }).join("")
+    : '<div class="rec"><div class="rank">Best chance</div><div class="name">None</div><p class="note">Nothing here is takeable. Same coin, open rails, and paper inventory all have to be true.</p></div>';
+  const fake = numbers.map((r, i) => {
+    const left = r.book_net != null ? r.book_net : r.net;
+    const why = r.same_coin === false ? "Looks big. Different coin."
+      : r.movable === false ? "Looks big. Cannot send the coin."
+      : (r.same_coin == null || r.movable == null) ? (r.reason || "Looks big. Cannot confirm it is the same coin.")
+      : r.inventory_ok === false ? (r.inventory_note || "Looks big. Paper inventory cannot take it.")
+      : (r.reason || "Looks big. Not a chance.");
+    return `<article class="rec"><div class="rank">Best number ${i + 1} · not a chance</div><div class="name">${esc(coin(r.pair))}</div><p class="route">Buy ${esc(nice(r.buy))}. Sell ${esc(nice(r.sell))}.</p><div class="left ${cls(left)}">${pct(left)} left</div><p class="note">${esc(why)}</p></article>`;
+  }).join("");
+  $("recs").innerHTML = chance + fake;
+}
+function render(s) {
+  last = s;
+  $("dot").className = "dot" + (s.scan_count ? " on" : "");
+  $("mode").textContent = s.scan_count ? "live" : "starting";
+  paintBeg();
+  paintRecs();
+  paintAdv();
+}
+async function brain() {
+  try {
+    const b = await (await fetch("/api/brain", { cache: "no-store" })).json();
+    $("hermesCall").textContent = (b.call || "waiting") + (b.changed === false ? " · same call" : "");
+    $("hermesSummary").textContent = b.summary || "";
+    const lines = [];
+    (b.picks || []).forEach((p) => lines.push("Look: " + (p.pair || "") + " — " + (p.why || "")));
+    (b.skips || []).forEach((p) => lines.push("Skip: " + (p.pair || "") + " — " + (p.why || "")));
+    $("hermesSkips").innerHTML = lines.map((l) => "<li>" + esc(l) + "</li>").join("");
+  } catch (e) {}
+}
+async function tick() {
+  try { render(await (await fetch("/api/state", { cache: "no-store" })).json()); }
+  catch (e) { $("mode").textContent = "offline"; }
+  brain();
+}
+tick();
+setInterval(tick, 1500);
+</script>
+</body>
+</html>

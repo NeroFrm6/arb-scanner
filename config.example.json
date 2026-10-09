@@ -1,0 +1,29 @@
+{
+  "capital_usd": 500,
+  "min_net": 0.0015,
+  "max_clip_usd": 100,
+  "min_clip_usd": 15,
+  "collision_band": 0.03,
+  "min_quote_volume": 20000,
+  "confirm_scans": 2,
+  "inventory": {
+    "binance": {},
+    "bybit": {},
+    "okx": {},
+    "kucoin": {},
+    "bitget": {},
+    "kraken": {},
+    "mexc": {},
+    "gate": {}
+  },
+  "fees": {
+    "binance": 0.001,
+    "bybit": 0.001,
+    "okx": 0.001,
+    "kucoin": 0.001,
+    "bitget": 0.001,
+    "kraken": 0.004,
+    "mexc": 0.0005,
+    "gate": 0.002
+  }
+}

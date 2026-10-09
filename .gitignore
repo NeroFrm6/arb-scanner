@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+port.txt
+brain.json
+journal.jsonl
+route_memory.json
+config.json
+board.html
+board-simple.html
+board-v2.html
+board-v3.html
+board-digest.html
+.DS_Store
+Thumbs.db
