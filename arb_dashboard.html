@@ -116,21 +116,19 @@
   .chip:hover { color: var(--ink); border-color: var(--accent); }
   .tip b, .edge-card b, .rec-card b { display: block; margin-bottom: 4px; }
   .tip p, .edge-card p, .rec-card p { margin: 0; color: var(--muted); font-size: 13px; }
-  .chat-dock { position: fixed; right: 18px; bottom: 18px; z-index: 40; width: min(400px, calc(100vw - 24px)); display: flex; flex-direction: column; gap: 8px; }
-  .chat-toggle { align-self: flex-end; border: 1px solid var(--line); background: var(--raised); border-radius: 999px; padding: 0 16px; font-weight: 650; box-shadow: 0 10px 30px color-mix(in srgb, #000 18%, transparent); }
-  .chat-panel { display: none; flex-direction: column; overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: var(--raised); box-shadow: 0 18px 50px color-mix(in srgb, #000 28%, transparent); max-height: min(72vh, 580px); }
-  .chat-panel.open { display: flex; }
+  .strategy-layout { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(320px, .95fr); gap: 12px; align-items: start; margin-top: 12px; }
+  .chat-panel { display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: var(--raised); min-height: 520px; max-height: calc(100vh - 36px); position: sticky; top: 12px; }
   .chat-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line); background: var(--fill); }
   .chat-head strong { font-size: 14px; }
   .chat-head span, .bubble .meta { color: var(--muted); font-size: 11px; }
-  .chat-msgs { padding: 12px; overflow: auto; display: flex; flex-direction: column; gap: 8px; min-height: 220px; max-height: 380px; }
+  .chat-msgs { padding: 12px; overflow: auto; display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 360px; }
   .bubble { max-width: 92%; padding: 10px 12px; border-radius: 12px; font-size: 13px; line-height: 1.4; white-space: pre-wrap; }
   .bubble.user { align-self: flex-end; background: color-mix(in srgb, var(--accent) 18%, var(--raised)); }
   .bubble.assistant { align-self: flex-start; background: var(--fill); border: 1px solid var(--line); }
   .bubble .meta { display: block; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
   .chat-form { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--line); }
-  .chat-form input { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--surface); color: var(--ink); }
-  .chat-form button { border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; font-weight: 650; }
+  .chat-form input { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--surface); color: var(--ink); min-height: 44px; }
+  .chat-form button { border: 1px solid var(--line); border-radius: 10px; padding: 0 14px; font-weight: 650; min-height: 44px; }
   .chat-form button:disabled { opacity: 0.5; cursor: wait; }
   @media (max-width: 980px) {
     .shell { display: block; }
@@ -138,8 +136,9 @@
     .brand span, .rail-foot, .nav button small { display: none; }
     .nav { flex-direction: row; }
     .nav button { white-space: nowrap; }
-    .workspace { padding: 14px 12px 108px; }
-    .glance, .gates, .steps, .stats, .lanes, .health, .split, .facts, .big-row { grid-template-columns: 1fr; }
+    .workspace { padding: 14px 12px 24px; }
+    .glance, .gates, .steps, .stats, .lanes, .health, .split, .facts, .big-row, .strategy-layout { grid-template-columns: 1fr; }
+    .chat-panel { position: static; max-height: 70vh; min-height: 420px; }
   }
   @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
 </style>
@@ -155,7 +154,7 @@
     <nav class="nav" aria-label="Sections">
       <button type="button" data-nav="overview" class="on">Call<small>Look, watch, or skip</small></button>
       <button type="button" data-nav="board">Routes<small>Plain read and every number</small></button>
-      <button type="button" data-nav="strategy">Strategy<small>What would flip the call</small></button>
+      <button type="button" data-nav="strategy">Strategy<small>Chat with Hermes</small></button>
       <button type="button" data-nav="bots">Bots<small>Paper arb bots</small></button>
     </nav>
     <p class="rail-foot">Same coin. Open rails. Paper inventory. Live book after fees. Miss one and it stays a number.</p>
@@ -237,19 +236,27 @@
           </div>
           <span class="badge" id="stratCall">—</span>
         </div>
-        <div class="split">
-          <div>
+        <div class="strategy-layout">
+          <div class="split" style="display:block">
             <h2>Tips</h2>
             <div class="tip-grid" id="stratTips"></div>
             <h2>Recommendations</h2>
             <div class="rec-grid" id="stratRecs"></div>
-          </div>
-          <div>
             <h2>Not a chance</h2>
             <div class="edge-grid" id="stratEdges"></div>
             <h2>Inventory to stage</h2>
             <ul class="watch" id="stratWatch"></ul>
             <div class="chips" id="stratChips"></div>
+          </div>
+          <div class="chat-panel" id="chatPanel">
+            <div class="chat-head">
+              <div><strong>Ask Hermes</strong><span> · paper only · live board</span></div>
+            </div>
+            <div class="chat-msgs" id="chatMsgs"></div>
+            <form class="chat-form" id="chatForm">
+              <input id="chatInput" type="text" maxlength="800" placeholder="Strategize with Hermes…" autocomplete="off" />
+              <button type="submit" id="chatSend">Send</button>
+            </form>
           </div>
         </div>
       </section>
@@ -267,20 +274,6 @@
       <div class="tip-grid" id="botList"></div>
     </section>
   </main>
-</div>
-<div class="chat-dock" id="chatDock">
-  <div class="chat-panel" id="chatPanel">
-    <div class="chat-head">
-      <div><strong>Chat with Hermes</strong><span> · paper only</span></div>
-      <button type="button" id="chatClose" aria-label="Close">Close</button>
-    </div>
-    <div class="chat-msgs" id="chatMsgs"></div>
-    <form class="chat-form" id="chatForm">
-      <input id="chatInput" type="text" maxlength="800" placeholder="Rails, inventory, or what would flip the call…" autocomplete="off" />
-      <button type="submit" id="chatSend">Send</button>
-    </form>
-  </div>
-  <button type="button" class="chat-toggle" id="chatToggle">Ask Hermes</button>
 </div>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -445,7 +438,7 @@ async function fetchStrategy() {
     $("stratWatch").innerHTML = (s.watchlist || []).map((w) => `<li>${esc(w)}</li>`).join("") || "<li>Empty paper inventory — no takeable chance until you stage balances.</li>";
     $("stratChips").innerHTML = (s.quick_prompts || []).map((p) => `<button type="button" class="chip" data-q="${esc(p)}">${esc(p)}</button>`).join("");
     $("stratChips").querySelectorAll(".chip").forEach((btn) => {
-      btn.onclick = () => { openChat(); $("chatInput").value = btn.getAttribute("data-q") || ""; $("chatInput").focus(); };
+      btn.onclick = () => { showView("strategy"); $("chatInput").value = btn.getAttribute("data-q") || ""; $("chatInput").focus(); };
     });
   } catch (e) {}
 }
@@ -455,8 +448,7 @@ function bubble(role, text, meta) {
   d.innerHTML = `<span class="meta">${esc(meta || role)}</span>${esc(text || "")}`;
   return d;
 }
-function openChat() { $("chatPanel").classList.add("open"); }
-function closeChat() { $("chatPanel").classList.remove("open"); }
+function openChat() { showView("strategy"); $("chatInput").focus(); }
 async function loadChat() {
   try {
     const data = await (await fetch("/api/chat", { cache: "no-store" })).json();
@@ -500,8 +492,6 @@ async function sendChat(text) {
   sendBtn.textContent = "Send";
   box.scrollTop = box.scrollHeight;
 }
-$("chatToggle").onclick = () => { openChat(); loadChat(); };
-$("chatClose").onclick = closeChat;
 $("chatForm").onsubmit = (ev) => { ev.preventDefault(); sendChat($("chatInput").value); };
 async function tick() {
   try { render(await (await fetch("/api/state", { cache: "no-store" })).json()); }
