@@ -1,8 +1,8 @@
 # Paper crypto arb scanner
 
-Local, paper-only scanner. It looks at public prices across exchanges, then decides whether a gap is a **chance** or just a **number**.
+Local, paper-only scanner for cross-exchange spatial arbitrage. Same-coin rails, inventory, Hermes brain hook. No orders. No API keys.
 
-A chance needs all of this:
+A spatial chance needs all of this:
 
 1. Same coin (deposit contract / network, not just the ticker)
 2. An open path to send it (withdraw on the cheap venue, deposit on the expensive one)
@@ -26,27 +26,31 @@ copy config.example.json config.json   # Windows
 python arb.py
 ```
 
-Open [http://127.0.0.1:8765](http://127.0.0.1:8765).
+Open http://127.0.0.1:8765 .
 
-`config.json` is local and gitignored. Put paper balances under `inventory` if you want a row to become a chance:
+For the scanner plus nothing else, `python arb.py` is enough. `python start_all.py` starts the same scanner.
+
+`config.json` is local and gitignored. Put paper balances under `inventory` if you want a row to become a chance (empty means no takeable chances shown):
 
 ```json
 "inventory": {
-  "binance": { "USDT": 500 },
-  "kucoin": { "LUNC": 1000000 }
+  "binance": { "USDT": 0 },
+  "kucoin": { "LUNC": 0 }
 }
 ```
 
-That example means: cash on Binance, LUNC already on KuCoin. Empty `{}` means you hold nothing there.
+Empty `{}` or zeros means you hold nothing there — no takeable chances will be shown.
 
 ## What you will see
 
-- **Hermes** — the last call (`look` / `watch` / `skip`) if you wired the agent
-- **Best chance** — takeable after rails + inventory. Often empty, and that is correct
-- **Best number** — the biggest leftover after fees, with why it is not a chance
-- **Simple / All the numbers** — beginner labels vs the raw table
+- **Hermes call** — last decision (`look` / `watch` / `skip`) written back by the agent
+- **Best chance** — takeable after rails + inventory + live book. Often empty (correct)
+- **Best number** — biggest leftover after fees, with real why it is not a chance
+- **Routes** — plain route cards and the full numbers table on one tab, plus majors and exchange health
+- **Strategy** — what would flip the Hermes call
+- **Bots** — paper roster. Empty until a bot is added. No orders.
 
-The 2% Zilliqa-style rows are usually **same ticker, closed withdrawals**. The scanner is supposed to say that.
+The 2% Zilliqa-style rows are usually **same ticker, closed withdrawals**. The scanner says that.
 
 ## Link it to Hermes Agent
 
@@ -68,7 +72,7 @@ cp -R skills/crypto-arb-brain ~/.hermes/skills/
 4. In Hermes, create a recurring job (every 15 minutes is enough) with this prompt:
 
 ```text
-You are the brain for the local paper crypto-arb scanner. No orders. No dollar amounts.
+You are the brain for the local paper ARB scanner. No orders. No dollar amounts.
 
 Load the crypto-arb-brain skill and follow it.
 Read http://127.0.0.1:8765/api/state, /api/journal, and /api/brain.
@@ -95,12 +99,16 @@ Blocked routes stay out of Best chance.
 ## API
 
 | Path | What |
-|---|---|
-| `GET /` | Dashboard |
+|------|------|
+| `GET /` | Paper ARB board |
 | `GET /api/state` | Live scan (no dollar amounts) |
 | `GET /api/brain` | Last Hermes call |
 | `POST /api/brain` | Write the call |
 | `GET /api/journal` | Opened / sticky / closed history |
+| `GET /api/strategy` | Tips and recommendations |
+| `GET /api/chat` | Strategy chat history |
+| `POST /api/chat` | Ask Hermes |
+| `GET /api/bots` | Paper bot roster |
 
 Binds to `127.0.0.1` only.
 
@@ -111,11 +119,13 @@ Paper only. Not a trading bot. Not financial advice. Exchange network data can b
 ## Layout
 
 ```
-arb.py                 scanner + local HTTP
-rails.py               same-coin / can-it-move / inventory / death memory
-dashboard.html         UI (board-digest.html is the same file on older trees)
-config.example.json    copy to config.json
+arb.py                     scanner + local HTTP (8765)
+rails.py                   same-coin / can-it-move / inventory / death memory
+strategy.py                tips, chat helper, paper-only text cleanup
+arb_dashboard.html         ARB board
+start_all.py               starts arb.py only if 8765 is free
+config.example.json        copy to config.json
 skills/crypto-arb-brain/SKILL.md
 ```
 
-Runtime files (`brain.json`, `journal.jsonl`, `route_memory.json`, `config.json`) stay on your machine.
+Runtime files (`brain.json`, `journal.jsonl`, `route_memory.json`, `config.json`, `chat.jsonl`, `bots.json`, logs/) stay on your machine.

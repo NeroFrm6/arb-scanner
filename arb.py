@@ -29,14 +29,19 @@ from rails import (
     save_memory,
 )
 
+from strategy import append_chat, build_strategy, hermes_reply, read_chat
+
 ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = ROOT / "config.json"
-HTML_PATH = next(
-    (p for p in (ROOT / "dashboard.html", ROOT / "board-digest.html") if p.exists()),
-    ROOT / "dashboard.html",
-)
+HTML_PATH = ROOT / "arb_dashboard.html"
+if not HTML_PATH.exists():
+    HTML_PATH = next(
+        (p for p in (ROOT / "dashboard.html", ROOT / "board-digest.html") if p.exists()),
+        ROOT / "dashboard.html",
+    )
 JOURNAL_PATH = ROOT / "journal.jsonl"
 BRAIN_PATH = ROOT / "brain.json"
+BOTS_PATH = ROOT / "bots.json"
 PORT_PATH = ROOT / "port.txt"
 
 FAST = ["binance", "bybit", "okx", "kucoin", "bitget", "kraken"]
@@ -63,8 +68,40 @@ _PATH = re.compile(r"([A-Za-z]:\\[^\s\"']+|/[A-Za-z]/Users/[^\s\"']+)")
 
 
 def public_text(value: str) -> str:
-    text = _PATH.sub("", _MONEY.sub("", value))
+    text = _PATH.sub("", _MONEY.sub("", value or ""))
     return re.sub(r"\s{2,}", " ", text).strip()
+
+
+def read_bots() -> dict:
+    """Paper roster only. Live status and secrets are dropped."""
+    raw: list = []
+    if BOTS_PATH.exists():
+        try:
+            loaded = json.loads(BOTS_PATH.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            loaded = []
+        if isinstance(loaded, dict):
+            loaded = loaded.get("bots") or []
+        if isinstance(loaded, list):
+            raw = loaded
+    bots = []
+    for item in raw:
+        if not isinstance(item, dict) or not item.get("name"):
+            continue
+        status = str(item.get("status") or "off").lower()
+        if status not in ("off", "paper", "paused"):
+            status = "off"
+        bots.append(
+            {
+                "id": public_text(str(item.get("id") or item.get("name")))[:40],
+                "name": public_text(str(item.get("name")))[:80],
+                "status": status,
+                "job": public_text(str(item.get("job") or ""))[:180],
+                "watches": public_text(str(item.get("watches") or ""))[:120],
+                "note": public_text(str(item.get("note") or ""))[:220],
+            }
+        )
+    return {"mode": "paper", "orders": False, "count": len(bots), "bots": bots[:24]}
 
 
 def public_episode(ep: dict, now: float) -> dict:
@@ -183,8 +220,10 @@ def read_journal(limit: int = 40) -> list[dict]:
 def default_brain() -> dict:
     return {
         "updated_at": None,
+        "role": "brain",
+        "engines": ["arb"],
         "call": "waiting",
-        "summary": "Hermes has not reviewed this yet.",
+        "summary": "Hermes is the brain for cross-exchange ARB. No review yet.",
         "picks": [],
         "skips": [],
         "lessons": [
@@ -192,6 +231,7 @@ def default_brain() -> dict:
             "Bitcoin and the other big coins lose to the fee. Do not call those trades.",
             "Two routes that need the same coins are one chance, not two.",
             "If the live book no longer shows the gap, the listed price was wrong.",
+            "Hermes is the only decision layer for cross-exchange ARB. The scanner finds gaps; Hermes decides look / watch / skip.",
         ],
     }
 
@@ -214,24 +254,29 @@ def write_brain(data: dict) -> dict:
     if call not in ("skip", "watch", "look", "waiting"):
         call = "watch"
     clean["call"] = call
+    clean["role"] = "brain"
+    clean["engines"] = ["arb"]
     clean["summary"] = public_text(str(data.get("summary") or ""))[:500]
     clean["updated_at"] = time.time()
-    picks = []
-    for item in data.get("picks") or []:
-        if isinstance(item, dict) and item.get("pair"):
-            picks.append({
-                "pair": str(item.get("pair"))[:24],
-                "buy": str(item.get("buy") or "")[:16],
-                "sell": str(item.get("sell") or "")[:16],
-                "why": public_text(str(item.get("why") or ""))[:180],
-            })
-    skips = []
-    for item in data.get("skips") or []:
-        if isinstance(item, dict) and item.get("pair"):
-            skips.append({
+
+    def _pair_rows(src, with_route: bool) -> list[dict]:
+        rows = []
+        for item in src or []:
+            if not isinstance(item, dict) or not item.get("pair"):
+                continue
+            row = {
                 "pair": str(item.get("pair"))[:24],
                 "why": public_text(str(item.get("why") or ""))[:180],
-            })
+            }
+            if with_route:
+                row["buy"] = str(item.get("buy") or "")[:16]
+                row["sell"] = str(item.get("sell") or "")[:16]
+            row["engine"] = "arb"
+            rows.append(row)
+        return rows
+
+    picks = _pair_rows(data.get("picks"), True)
+    skips = _pair_rows(data.get("skips"), False)
     lessons = []
     for lesson in data.get("lessons") or clean["lessons"]:
         text = public_text(str(lesson))[:220]
@@ -241,8 +286,24 @@ def write_brain(data: dict) -> dict:
     clean["skips"] = skips[:8]
     clean["lessons"] = lessons[:12]
     prev = read_brain()
-    sig = json.dumps({"call": clean["call"], "summary": clean["summary"], "picks": clean["picks"], "skips": clean["skips"]}, sort_keys=True)
-    prev_sig = json.dumps({"call": prev.get("call"), "summary": prev.get("summary"), "picks": prev.get("picks"), "skips": prev.get("skips")}, sort_keys=True)
+    sig = json.dumps(
+        {
+            "call": clean["call"],
+            "summary": clean["summary"],
+            "picks": clean["picks"],
+            "skips": clean["skips"],
+        },
+        sort_keys=True,
+    )
+    prev_sig = json.dumps(
+        {
+            "call": prev.get("call"),
+            "summary": prev.get("summary"),
+            "picks": prev.get("picks"),
+            "skips": prev.get("skips"),
+        },
+        sort_keys=True,
+    )
     clean["changed"] = sig != prev_sig
     if not clean["changed"]:
         clean["updated_at"] = prev.get("updated_at")
@@ -900,6 +961,11 @@ async def run() -> None:
         )
 
 
+def strategy_pack() -> dict:
+    state = ENGINE.snapshot() if ENGINE else {"mode": "paper", "scan_count": 0}
+    return build_strategy(state, read_brain(), read_journal())
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt: str, *args) -> None:
         return
@@ -908,9 +974,17 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", content_type)
         self.send_header("Cache-Control", "no-store")
+        self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def do_OPTIONS(self) -> None:
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
 
     def do_GET(self) -> None:
         path = urlparse(self.path).path
@@ -924,6 +998,19 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/journal":
             self._send(200, json.dumps(read_journal()).encode(), "application/json")
             return
+        if path == "/api/strategy":
+            self._send(200, json.dumps(strategy_pack()).encode(), "application/json")
+            return
+        if path == "/api/chat":
+            self._send(
+                200,
+                json.dumps({"messages": read_chat(80), "role": "hermes_strategy"}).encode(),
+                "application/json",
+            )
+            return
+        if path == "/api/bots":
+            self._send(200, json.dumps(read_bots()).encode(), "application/json")
+            return
         if path in ("/", "/index.html"):
             html = HTML_PATH.read_bytes()
             self._send(200, html, "text/html; charset=utf-8")
@@ -932,9 +1019,6 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
-        if path != "/api/brain":
-            self._send(404, b"not found", "text/plain")
-            return
         length = int(self.headers.get("Content-Length") or 0)
         if length <= 0 or length > 20000:
             self._send(400, b"bad body", "text/plain")
@@ -944,19 +1028,49 @@ class Handler(BaseHTTPRequestHandler):
         except json.JSONDecodeError:
             self._send(400, b"bad json", "text/plain")
             return
-        saved = write_brain(data if isinstance(data, dict) else {})
-        self._send(200, json.dumps(saved).encode(), "application/json")
+        if not isinstance(data, dict):
+            self._send(400, b"bad json", "text/plain")
+            return
+
+        if path == "/api/brain":
+            saved = write_brain(data)
+            self._send(200, json.dumps(saved).encode(), "application/json")
+            return
+
+        if path == "/api/chat":
+            msg = public_text(str(data.get("message") or data.get("text") or ""))[:800]
+            if not msg:
+                self._send(400, b"empty message", "text/plain")
+                return
+            user_row = append_chat("user", msg, "dashboard")
+            pack = strategy_pack()
+            reply, source = hermes_reply(msg, pack)
+            asst_row = append_chat("assistant", reply, source)
+            self._send(
+                200,
+                json.dumps(
+                    {
+                        "ok": True,
+                        "user": user_row,
+                        "assistant": asst_row,
+                        "source": source,
+                        "posture": pack.get("posture"),
+                    }
+                ).encode(),
+                "application/json",
+            )
+            return
+
+        self._send(404, b"not found", "text/plain")
 
 
 def serve() -> int:
-    for port in range(8765, 8775):
-        try:
-            httpd = ThreadingHTTPServer((HOST, port), Handler)
-        except OSError:
-            continue
-        threading.Thread(target=httpd.serve_forever, daemon=True).start()
-        return port
-    raise SystemExit("no free port in 8765-8774")
+    try:
+        httpd = ThreadingHTTPServer((HOST, 8765), Handler)
+    except OSError as exc:
+        raise SystemExit("port 8765 is already in use. Stop the old scanner before starting another.") from exc
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    return 8765
 
 
 def main() -> None:

@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ARB</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --ink: var(--foreground, light-dark(#1d1d1f, #f5f5f7));
+    --muted: var(--muted-foreground, light-dark(#6e6e73, #98989d));
+    --accent: var(--accent, light-dark(#0071e3, #0a84ff));
+    --line: var(--border, light-dark(#d2d2d7, #3a3a3c));
+    --surface: var(--card, light-dark(#f5f5f7, #1c1c1e));
+    --raised: light-dark(#ffffff, #2c2c2e);
+    --good: light-dark(#248a3d, #30d158);
+    --bad: light-dark(#d70015, #ff453a);
+    --warn: light-dark(#b25000, #ffd60a);
+    --fill: color-mix(in srgb, var(--ink) 5%, transparent);
+    --fill-2: color-mix(in srgb, var(--ink) 8%, transparent);
+    --shadow: 0 1px 0 color-mix(in srgb, var(--ink) 6%, transparent);
+    --rail: 220px;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; background: var(--surface); color: var(--ink); }
+  body { font: 14px/1.45 "Segoe UI", system-ui, sans-serif; letter-spacing: -0.011em; }
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; background: transparent; border: 0; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .shell { display: grid; grid-template-columns: var(--rail) minmax(0, 1fr); min-height: 100vh; }
+  .rail {
+    position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 16px;
+    padding: 20px 14px 16px; border-right: 1px solid var(--line);
+    background: color-mix(in srgb, var(--surface) 88%, var(--ink));
+  }
+  .brand { display: flex; flex-direction: column; gap: 6px; padding: 0 8px; }
+  .brand b { font-size: 15px; font-weight: 650; letter-spacing: -0.03em; }
+  .brand span, .rail-foot, .gate span, .sub, .s, .route, .blurb, .note, .mean, .foot { color: var(--muted); }
+  .brand span, .rail-foot, .gate span { font-size: 12px; line-height: 1.35; }
+  .nav { display: flex; flex-direction: column; gap: 4px; }
+  .nav button, .chip, .chat-toggle, .chat-form button, .chat-head button { min-height: 44px; }
+  .nav button { text-align: left; border-radius: 10px; padding: 0 12px; color: var(--muted); font-weight: 600; }
+  .nav button small { display: block; font-weight: 450; font-size: 11px; color: var(--muted); }
+  .nav button.on, .nav button:hover { background: var(--fill-2); color: var(--ink); }
+  .rail-foot { margin-top: auto; padding: 0 8px; }
+  .pill { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 3px 8px; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); width: fit-content; }
+  .workspace { min-width: 0; padding: 16px 20px 96px; }
+  .top, .hermes-top, .strategy-top, .panel-head, .lane-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .top { align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+  .live { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+  .mark { color: var(--ink); font-weight: 650; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.on { background: var(--good); box-shadow: 0 0 0 4px color-mix(in srgb, var(--good) 18%, transparent); }
+  .modes, .tabs { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--fill); }
+  .modes button, .tabs button { padding: 0 12px; color: var(--muted); min-height: 36px; }
+  .modes button.on, .tabs button.on { background: var(--raised); color: var(--ink); }
+  .view { display: none; }
+  .view.on { display: block; }
+  .glance, .gates, .steps, .stats, .lanes, .health, .split, .tip-grid, .edge-grid, .rec-grid, #list { display: grid; gap: 10px; }
+  .glance { grid-template-columns: minmax(0, 1.5fr) minmax(260px, .7fr); margin-bottom: 12px; }
+  .gates { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 12px; }
+  .steps { grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0 0 12px; }
+  .stats { grid-template-columns: 1.15fr .7fr 1.05fr; margin: 12px 0; }
+  .lanes { grid-template-columns: minmax(240px, .8fr) minmax(0, 1.4fr); align-items: start; }
+  .health { grid-template-columns: 1fr 1fr; }
+  .split { grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr); align-items: start; }
+  .tip-grid, .edge-grid, .rec-grid, #list { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .verdict { margin: 0; font-size: clamp(22px, 2.2vw, 32px); font-weight: 640; letter-spacing: -0.035em; line-height: 1.12; text-wrap: pretty; }
+  .sub { margin: 8px 0 0; font-size: 13px; }
+  .panel, .card, .rec, .gate, .step, .hermes, .strategy, .tip, .edge-card, .rec-card, .lane {
+    border: 1px solid var(--line); border-radius: var(--radius); background: var(--raised);
+    box-shadow: var(--shadow); min-width: 0;
+  }
+  .panel, .card, .rec, .hermes, .strategy, .tip, .edge-card, .rec-card, .lane { padding: 14px 16px; }
+  .gate, .step { padding: 12px 14px; background: var(--fill); box-shadow: none; }
+  .gate b, .step b { display: block; margin-top: 4px; font-size: 14px; font-weight: 620; }
+  .k, .rank, .fact span, th, .gate span, .step span { color: var(--muted); }
+  .k, .rank { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 650; }
+  .step span, .gate span { display: block; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .v { margin-top: 6px; font-size: 26px; font-weight: 640; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+  .route { margin: 4px 0 8px; }
+  .foot, .blurb { font-size: 13px; }
+  h2 { margin: 0 0 10px; font-size: 12px; color: var(--muted); font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; }
+  h3 { margin: 0; font-size: 16px; letter-spacing: -0.02em; }
+  .facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .fact { background: var(--fill); border-radius: 10px; padding: 8px 10px; }
+  .fact span { display: block; font-size: 11px; margin-bottom: 2px; }
+  .fact b, .num { font-variant-numeric: tabular-nums; font-weight: 620; }
+  .mean, .note { margin: 8px 0 0; font-size: 13px; }
+  .pos { color: var(--good); } .neg { color: var(--bad); } .amb { color: var(--warn); }
+  .more { padding: 10px 0; color: var(--accent); min-height: 44px; }
+  .name { margin-top: 4px; font-size: 20px; font-weight: 650; letter-spacing: -0.03em; }
+  .left { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
+  .lane-num { background: color-mix(in srgb, var(--raised) 92%, var(--warn)); }
+  .lane .rec { margin-top: 8px; }
+  .big-row { display: grid; grid-template-columns: 1.1fr 1.4fr 1fr 1fr; gap: 8px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .posture { margin: 8px 0 0; font-size: 22px; font-weight: 640; letter-spacing: -0.03em; text-wrap: pretty; }
+  .posture.pos { color: var(--good); } .posture.neg { color: var(--bad); } .posture.amb { color: var(--warn); }
+  .hermes { margin-top: 12px; }
+  .hermes ul, .watch { margin: 10px 0 0; padding-left: 18px; color: var(--muted); max-height: 220px; overflow: auto; }
+  .hermes li, .watch li { margin: 4px 0; }
+  .scroll { max-height: 420px; overflow: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid color-mix(in srgb, var(--line) 80%, transparent); vertical-align: top; }
+  th { font-weight: 620; position: sticky; top: 0; background: var(--raised); }
+  .num { white-space: nowrap; }
+  .log { font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: var(--muted); max-height: 180px; overflow: auto; }
+  .ex { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 5px 0; }
+  .bar { flex: 1; height: 4px; background: var(--fill); border-radius: 99px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--accent); }
+  .spark { width: 100%; height: 42px; display: block; margin-top: 8px; }
+  .badge, .chip { font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; color: var(--muted); background: transparent; }
+  .badge.pos { color: var(--good); } .badge.neg { color: var(--bad); } .badge.amb { color: var(--warn); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .chip:hover { color: var(--ink); border-color: var(--accent); }
+  .tip b, .edge-card b, .rec-card b { display: block; margin-bottom: 4px; }
+  .tip p, .edge-card p, .rec-card p { margin: 0; color: var(--muted); font-size: 13px; }
+  .chat-dock { position: fixed; right: 18px; bottom: 18px; z-index: 40; width: min(400px, calc(100vw - 24px)); display: flex; flex-direction: column; gap: 8px; }
+  .chat-toggle { align-self: flex-end; border: 1px solid var(--line); background: var(--raised); border-radius: 999px; padding: 0 16px; font-weight: 650; box-shadow: 0 10px 30px color-mix(in srgb, #000 18%, transparent); }
+  .chat-panel { display: none; flex-direction: column; overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: var(--raised); box-shadow: 0 18px 50px color-mix(in srgb, #000 28%, transparent); max-height: min(72vh, 580px); }
+  .chat-panel.open { display: flex; }
+  .chat-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line); background: var(--fill); }
+  .chat-head strong { font-size: 14px; }
+  .chat-head span, .bubble .meta { color: var(--muted); font-size: 11px; }
+  .chat-msgs { padding: 12px; overflow: auto; display: flex; flex-direction: column; gap: 8px; min-height: 220px; max-height: 380px; }
+  .bubble { max-width: 92%; padding: 10px 12px; border-radius: 12px; font-size: 13px; line-height: 1.4; white-space: pre-wrap; }
+  .bubble.user { align-self: flex-end; background: color-mix(in srgb, var(--accent) 18%, var(--raised)); }
+  .bubble.assistant { align-self: flex-start; background: var(--fill); border: 1px solid var(--line); }
+  .bubble .meta { display: block; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .chat-form { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--line); }
+  .chat-form input { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--surface); color: var(--ink); }
+  .chat-form button { border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; font-weight: 650; }
+  .chat-form button:disabled { opacity: 0.5; cursor: wait; }
+  @media (max-width: 980px) {
+    .shell { display: block; }
+    .rail { position: sticky; top: 0; z-index: 30; height: auto; width: 100%; flex-direction: row; align-items: center; gap: 10px; padding: 10px 12px; border-right: 0; border-bottom: 1px solid var(--line); overflow-x: auto; }
+    .brand span, .rail-foot, .nav button small { display: none; }
+    .nav { flex-direction: row; }
+    .nav button { white-space: nowrap; }
+    .workspace { padding: 14px 12px 108px; }
+    .glance, .gates, .steps, .stats, .lanes, .health, .split, .facts, .big-row { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="rail">
+    <div class="brand">
+      <span class="pill">Paper · no orders</span>
+      <b>Cross-exchange ARB</b>
+      <span>A chance is a number that can actually move.</span>
+    </div>
+    <nav class="nav" aria-label="Sections">
+      <button type="button" data-nav="overview" class="on">Call<small>Look, watch, or skip</small></button>
+      <button type="button" data-nav="board">Routes<small>Plain read and every number</small></button>
+      <button type="button" data-nav="strategy">Strategy<small>What would flip the call</small></button>
+      <button type="button" data-nav="bots">Bots<small>Paper arb bots</small></button>
+    </nav>
+    <p class="rail-foot">Same coin. Open rails. Paper inventory. Live book after fees. Miss one and it stays a number.</p>
+  </aside>
+  <main class="workspace">
+    <header class="top">
+      <div class="live"><span class="mark">Spatial board</span><span id="dot" class="dot"></span><span id="mode">starting</span></div>
+    </header>
+
+    <section class="view on" data-view="overview">
+      <div class="glance">
+        <div>
+          <p class="verdict" id="verdict">Looking at prices.</p>
+          <p class="sub" id="scanAge"></p>
+          <p class="route" id="hermesSummary">Hermes has not reviewed this yet.</p>
+        </div>
+        <div class="panel">
+          <div class="k">Hermes call</div>
+          <p class="posture" id="hermesCall">waiting</p>
+          <p class="route" id="hermesRole">Hermes decides look, watch, or skip. The scanner only finds gaps. Paper only.</p>
+        </div>
+      </div>
+      <div class="gates" aria-label="What makes a chance">
+        <div class="gate"><span>1. Same coin</span><b>Contract, not ticker</b></div>
+        <div class="gate"><span>2. Open rails</span><b>Withdraw and deposit</b></div>
+        <div class="gate"><span>3. Inventory</span><b>Coin on sell, quote on buy</b></div>
+        <div class="gate"><span>4. Live book</span><b>Still there after fees</b></div>
+      </div>
+      <div class="steps">
+        <div class="step"><span>Buy</span><b id="flowBuy">where it is cheaper</b></div>
+        <div class="step"><span>Fee</span><b>Comes off both trades</b></div>
+        <div class="step"><span>Sell</span><b id="flowSell">where the bid is higher</b></div>
+      </div>
+      <div class="lanes" id="recs" aria-label="Best chances"></div>
+      <div class="stats">
+        <div class="panel"><div class="k">Best checked difference</div><div class="v" id="bestNet">—</div><div class="s" id="bestRoute">waiting</div></div>
+        <div class="panel"><div class="k">Open signals</div><div class="v" id="openN">0</div><div class="s" id="openS">confirmed twice</div></div>
+        <div class="panel"><div class="k">Last hour</div><svg id="spark" class="spark" viewBox="0 0 280 46" preserveAspectRatio="none"></svg></div>
+      </div>
+      <section class="hermes" id="hermes">
+        <div class="hermes-top"><strong>Why this call</strong><span class="badge">ARB</span></div>
+        <ul id="hermesSkips"></ul>
+      </section>
+    </section>
+
+    <section class="view" data-view="board">
+      <h2>Trusted routes</h2>
+      <div id="list"></div>
+      <button id="more" class="more" type="button" hidden>Show more</button>
+      <div class="panel" style="margin-top:14px">
+        <div class="panel-head">
+          <strong>Every edge</strong>
+          <div class="tabs">
+            <button id="tabT" class="on" type="button">Trusted</button>
+            <button id="tabO" type="button">Other</button>
+            <button id="tabM" type="button">Big coins</button>
+          </div>
+        </div>
+        <div class="scroll" id="table"></div>
+      </div>
+      <p class="foot" id="note"></p>
+      <h2>Coins you already know</h2>
+      <div id="big"></div>
+      <p class="foot">No money is moved. A gap that stays open usually means the coin cannot be sent across.</p>
+      <h2>Exchange health</h2>
+      <div class="health">
+        <div class="panel"><div class="k">Latency</div><div id="venues"></div></div>
+        <div class="panel"><div class="k">Scan log</div><div class="log" id="log"></div></div>
+      </div>
+    </section>
+
+    <section class="view" data-view="strategy">
+      <section class="strategy" id="strategy">
+        <div class="strategy-top">
+          <div>
+            <div class="k">What would change the call</div>
+            <p class="posture" id="stratPosture">Loading posture…</p>
+            <p class="route" id="stratSummary"></p>
+          </div>
+          <span class="badge" id="stratCall">—</span>
+        </div>
+        <div class="split">
+          <div>
+            <h2>Tips</h2>
+            <div class="tip-grid" id="stratTips"></div>
+            <h2>Recommendations</h2>
+            <div class="rec-grid" id="stratRecs"></div>
+          </div>
+          <div>
+            <h2>Not a chance</h2>
+            <div class="edge-grid" id="stratEdges"></div>
+            <h2>Inventory to stage</h2>
+            <ul class="watch" id="stratWatch"></ul>
+            <div class="chips" id="stratChips"></div>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <section class="view" data-view="bots">
+      <div class="strategy-top">
+        <div>
+          <div class="k">Arb bots</div>
+          <p class="posture" id="botsTitle">No bots yet</p>
+          <p class="route" id="botsNote">This is the roster for every arb bot we add. Paper only. Hermes still decides look, watch, or skip. A bot does not send orders.</p>
+        </div>
+        <span class="badge" id="botsCount">0</span>
+      </div>
+      <div class="tip-grid" id="botList"></div>
+    </section>
+  </main>
+</div>
+<div class="chat-dock" id="chatDock">
+  <div class="chat-panel" id="chatPanel">
+    <div class="chat-head">
+      <div><strong>Chat with Hermes</strong><span> · paper only</span></div>
+      <button type="button" id="chatClose" aria-label="Close">Close</button>
+    </div>
+    <div class="chat-msgs" id="chatMsgs"></div>
+    <form class="chat-form" id="chatForm">
+      <input id="chatInput" type="text" maxlength="800" placeholder="Rails, inventory, or what would flip the call…" autocomplete="off" />
+      <button type="submit" id="chatSend">Send</button>
+    </form>
+  </div>
+  <button type="button" class="chat-toggle" id="chatToggle">Ask Hermes</button>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+const NAMES = { binance:"Binance", bybit:"Bybit", okx:"OKX", kucoin:"KuCoin", bitget:"Bitget", kraken:"Kraken", mexc:"MEXC", gate:"Gate" };
+const COINS = { BTC:"Bitcoin", ETH:"Ethereum", SOL:"Solana", XRP:"XRP", DOGE:"Dogecoin", LINK:"Chainlink", ZIL:"Zilliqa" };
+let tab = "trusted", last = null, showAll = false;
+$("tabT").onclick = () => { tab = "trusted"; paintAdv(); };
+$("tabO").onclick = () => { tab = "other"; paintAdv(); };
+$("tabM").onclick = () => { tab = "majors"; paintAdv(); };
+$("more").onclick = () => { showAll = !showAll; paintBeg(); };
+function showView(name) {
+  document.querySelectorAll(".view").forEach((v) => v.classList.toggle("on", v.dataset.view === name));
+  document.querySelectorAll("[data-nav]").forEach((b) => b.classList.toggle("on", b.dataset.nav === name));
+  try { sessionStorage.setItem("dash-view", name); } catch (e) {}
+}
+document.querySelectorAll("[data-nav]").forEach((b) => { b.onclick = () => showView(b.dataset.nav); });
+try { showView(sessionStorage.getItem("dash-view") || "overview"); } catch (e) { showView("overview"); }
+document.addEventListener("keydown", (ev) => {
+  if (ev.target && (ev.target.tagName === "INPUT" || ev.target.tagName === "TEXTAREA")) return;
+  if (ev.key === "1") showView("overview");
+  if (ev.key === "2") showView("board");
+  if (ev.key === "3") showView("strategy");
+  if (ev.key === "4") showView("bots");
+});
+function nice(n) { return NAMES[n] || n; }
+function coin(pair) { const b = String(pair || "").split("/")[0]; return COINS[b] || b; }
+function pct(x) {
+  if (x == null || Number.isNaN(Number(x))) return "—";
+  const n = x * 100;
+  return (n > 0 ? "+" : "") + n.toFixed(2) + "%";
+}
+function cls(x) { if (x == null) return ""; if (x >= 0.0015) return "pos"; if (x > 0) return "amb"; return "neg"; }
+function callCls(raw) {
+  const c = String(raw || "").toLowerCase();
+  if (c.includes("look")) return "pos";
+  if (c.includes("skip")) return "neg";
+  if (c.includes("watch")) return "amb";
+  return "";
+}
+function dur(s) {
+  if (s == null) return "—";
+  if (s < 60) return s + " sec";
+  return Math.floor(s / 60) + " min";
+}
+function esc(s) { return String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c])); }
+function age(ts) {
+  if (!ts) return "";
+  const s = Math.max(0, Date.now() / 1000 - ts);
+  return s < 90 ? "Checked " + Math.round(s) + "s ago" : "Checked " + Math.round(s / 60) + "m ago";
+}
+function mean(r) {
+  if (r.sticky) return "This difference has stayed open for " + dur(r.open_for_s) + ". You probably cannot send the coin from one exchange to the other.";
+  if (r.signal) return "We checked the live prices twice. They still show this. That does not mean you can send the coin across.";
+  if (r.book_net == null) return "We have the listed prices, but we have not double-checked the live order book yet.";
+  if (r.book_net <= 0) return "The difference was gone when we checked the live prices.";
+  if ((r.reason || "").indexOf("already used") >= 0) return "A better row above already uses these same coins.";
+  if (r.net <= 0) return "The fee is bigger than the price difference. No trade.";
+  return "Watching. Not strong enough to treat as a real chance yet.";
+}
+function facts(r) {
+  return `<div class="facts"><div class="fact"><span>Price difference</span><b class="${cls(r.gross)}">${pct(r.gross)}</b></div><div class="fact"><span>Left after the fee</span><b class="${cls(r.net)}">${pct(r.net)}</b></div><div class="fact"><span>Checked live</span><b class="${cls(r.book_net)}">${pct(r.book_net)}</b></div><div class="fact"><span>Open for</span><b>${dur(r.open_for_s)}</b></div></div>`;
+}
+function paintBeg() {
+  if (!last) return;
+  const rows = last.trusted || [];
+  const hit = (last.episodes && last.episodes[0]) || rows.find((r) => (r.book_net != null ? r.book_net : r.net) > 0);
+  if (!last.scan_count) $("verdict").textContent = "Looking at prices.";
+  else if (!hit) $("verdict").textContent = "Nothing beats the fee right now.";
+  else $("verdict").textContent = coin(hit.pair) + " is cheaper on " + nice(hit.buy) + " than on " + nice(hit.sell) + ". After the fee, " + pct(hit.book_net != null ? hit.book_net : hit.net) + " is left.";
+  $("flowBuy").textContent = hit ? nice(hit.buy) : "where it is cheaper";
+  $("flowSell").textContent = hit ? nice(hit.sell) : "where the bid is higher";
+  const shown = showAll ? rows : rows.slice(0, 5);
+  $("list").innerHTML = shown.map((r) => `<article class="card"><h3>${esc(coin(r.pair))}</h3><p class="route">Buy on ${esc(nice(r.buy))}. Sell on ${esc(nice(r.sell))}.</p>${facts(r)}<p class="mean">${esc(mean(r))}</p></article>`).join("") || "<p class='route'>No difference on the trusted exchanges right now.</p>";
+  $("more").hidden = rows.length <= 5;
+  $("more").textContent = showAll ? "Show less" : "Show " + (rows.length - 5) + " more";
+  $("scanAge").textContent = age(last.last_scan_at);
+  $("big").innerHTML = (last.majors || []).map((r) => `<div class="big-row"><b>${esc(coin(r.pair))}</b><span>${esc(nice(r.buy))} → ${esc(nice(r.sell))}</span><span class="${cls(r.gross)}">difference ${pct(r.gross)}</span><span class="${cls(r.net)}">after fee ${pct(r.net)}</span></div>`).join("");
+}
+function advTable(rows, majors) {
+  if (!rows.length) return "<p class='route'>Nothing on this tab.</p>";
+  if (majors) return `<table><tr><th>Pair</th><th>Buy</th><th>Sell</th><th>Difference</th><th>After fee</th><th>What it means</th></tr>${rows.map((r) => `<tr><td>${esc(r.pair)}</td><td>${esc(r.buy)}</td><td>${esc(r.sell)}</td><td class="num ${cls(r.gross)}">${pct(r.gross)}</td><td class="num ${cls(r.net)}">${pct(r.net)}</td><td>${esc(r.reason || "")}</td></tr>`).join("")}</table>`;
+  return `<table><tr><th>Pair</th><th>Route</th><th>Difference</th><th>After fee</th><th>Checked live</th><th>Open</th><th>Status</th></tr>${rows.map((r) => {
+    const status = r.sticky ? "stuck" : r.signal ? "possible" : r.book_net == null ? "not checked" : r.book_net > 0 ? "watching" : "gone";
+    return `<tr><td>${esc(r.pair)}</td><td>${esc(r.buy)} → ${esc(r.sell)}</td><td class="num ${cls(r.gross)}">${pct(r.gross)}</td><td class="num ${cls(r.net)}">${pct(r.net)}</td><td class="num ${cls(r.book_net)}">${pct(r.book_net)}</td><td class="num">${dur(r.open_for_s)}</td><td>${status}</td></tr>`;
+  }).join("")}</table>`;
+}
+function spark(hist) {
+  const svg = $("spark"), vals = (hist || []).map((p) => p.net);
+  if (vals.length < 2) { svg.innerHTML = ""; return; }
+  const w = 280, h = 46, pad = 2, min = Math.min(...vals, 0), max = Math.max(...vals, 0), span = (max - min) || 1;
+  const pts = vals.map((v, i) => (pad + i / (vals.length - 1) * (w - pad * 2)).toFixed(1) + " " + (h - pad - (v - min) / span * (h - pad * 2)).toFixed(1));
+  svg.innerHTML = `<path d="M${pts.join(" L")}" fill="none" stroke="var(--accent)" stroke-width="1.5"/>`;
+}
+function paintAdv() {
+  if (!last) return;
+  ["tabT","tabO","tabM"].forEach((id, i) => $(id).classList.toggle("on", ["trusted","other","majors"][i] === tab));
+  const rows = tab === "other" ? last.other : tab === "majors" ? last.majors : last.trusted;
+  $("table").innerHTML = advTable(rows || [], tab === "majors");
+  const best = last.best_book;
+  $("bestNet").textContent = best ? pct(best.book_net) : "—";
+  $("bestNet").className = "v " + (best ? cls(best.book_net) : "");
+  $("bestRoute").textContent = best ? coin(best.pair) + " · " + nice(best.buy) + " → " + nice(best.sell) : "waiting";
+  $("openN").textContent = String((last.episodes || []).length);
+  $("openS").textContent = (last.episodes || []).some((e) => e.sticky) ? "one has stayed open" : "checked twice";
+  spark(last.best_net_history);
+  $("venues").innerHTML = (last.venues || []).map((v) => `<div class="ex"><span>${esc(nice(v.name))}</span><div class="bar"><i style="width:${Math.max(8, Math.min(100, (v.ms || 0) / 80))}%"></i></div><span>${v.ok ? v.ms + " ms" : "down"}</span></div>`).join("");
+  $("log").innerHTML = (last.log || []).map((l) => `<div>${esc(String(l).replace(/\$[\d,]+(?:\.\d+)?/g, ""))}</div>`).join("");
+  $("note").textContent = last.note || "";
+}
+function paintRecs() {
+  const picks = last.recommendations || [];
+  const numbers = last.best_numbers || [];
+  const chance = picks.length
+    ? picks.map((r, i) => {
+        const left = r.book_net != null ? r.book_net : r.net;
+        return `<article class="rec"><div class="rank">Best chance ${i + 1}</div><div class="name">${esc(coin(r.pair))}</div><p class="route">Buy ${esc(nice(r.buy))}. Sell ${esc(nice(r.sell))}.</p><div class="left ${cls(left)}">${pct(left)} left</div><p class="note">${esc(r.reason || "Same coin, can move, paper inventory could take it.")}</p></article>`;
+      }).join("")
+    : '<div class="rec"><div class="rank">Best chance</div><div class="name">None</div><p class="note">Nothing here is takeable. Same coin, open rails, and paper inventory all have to be true.</p></div>';
+  const fake = numbers.map((r, i) => {
+    const left = r.book_net != null ? r.book_net : r.net;
+    const why = r.same_coin === false ? "Looks big. Different coin."
+      : r.movable === false ? "Looks big. Cannot send the coin."
+      : (r.same_coin == null || r.movable == null) ? (r.reason || "Looks big. Cannot confirm it is the same coin.")
+      : r.inventory_ok === false ? (r.inventory_note || "Looks big. Paper inventory cannot take it.")
+      : (r.reason || "Looks big. Not a chance.");
+    return `<article class="rec"><div class="rank">Best number ${i + 1} · not a chance</div><div class="name">${esc(coin(r.pair))}</div><p class="route">Buy ${esc(nice(r.buy))}. Sell ${esc(nice(r.sell))}.</p><div class="left ${cls(left)}">${pct(left)} left</div><p class="note">${esc(why)}</p></article>`;
+  }).join("") || "<p class='route'>No leftover numbers right now.</p>";
+  $("recs").className = "lanes";
+  $("recs").innerHTML = `<div class="lane"><h2>Takeable</h2>${chance}</div><div class="lane lane-num"><h2>Big number · not a chance</h2>${fake}</div>`;
+}
+function render(s) {
+  last = s;
+  $("dot").className = "dot" + (s.scan_count ? " on" : "");
+  $("mode").textContent = s.scan_count ? "live" : "starting";
+  paintBeg();
+  paintRecs();
+  paintAdv();
+}
+async function brain() {
+  try {
+    const b = await (await fetch("/api/brain", { cache: "no-store" })).json();
+    $("hermesCall").textContent = (b.call || "waiting") + (b.changed === false ? " · same call" : "");
+    $("hermesCall").className = "posture " + callCls(b.call);
+    if ($("hermesRole")) $("hermesRole").textContent = "Hermes is the only brain. The scanner finds gaps. Hermes decides look, watch, or skip. Paper only.";
+    $("hermesSummary").textContent = b.summary || "";
+    const lines = [];
+    (b.picks || []).forEach((p) => lines.push("Look: " + (p.pair || "") + " — " + (p.why || "")));
+    (b.skips || []).forEach((p) => lines.push("Skip: " + (p.pair || "") + " — " + (p.why || "")));
+    $("hermesSkips").innerHTML = lines.map((l) => "<li>" + esc(l) + "</li>").join("");
+  } catch (e) {}
+}
+async function fetchStrategy() {
+  try {
+    const s = await (await fetch("/api/strategy", { cache: "no-store" })).json();
+    $("stratPosture").textContent = s.posture || "—";
+    $("stratSummary").textContent = s.summary || "";
+    $("stratCall").textContent = (s.call || "—") + " · ARB";
+    $("stratCall").className = "badge " + callCls(s.call);
+    $("stratTips").innerHTML = (s.tips || []).map((t,i) => `<div class="tip"><b>Tip ${i+1}</b><p>${esc(t)}</p></div>`).join("") || "<p class='route'>No tips yet.</p>";
+    $("stratRecs").innerHTML = (s.recommendations || []).map((r) => `<div class="rec-card"><b>${esc(r.title||"")}</b><p>${esc(r.detail||"")}</p></div>`).join("") || "<p class='route'>No recommendations.</p>";
+    $("stratEdges").innerHTML = (s.edges || []).map((e) => `<div class="edge-card"><b>${esc(e.pair||"")}</b><p>${esc(e.label||"")} · ${esc(e.left||"")}</p><p>${esc(e.why||"")}</p></div>`).join("") || "<p class='route'>No leftover edges.</p>";
+    $("stratWatch").innerHTML = (s.watchlist || []).map((w) => `<li>${esc(w)}</li>`).join("") || "<li>Empty paper inventory — no takeable chance until you stage balances.</li>";
+    $("stratChips").innerHTML = (s.quick_prompts || []).map((p) => `<button type="button" class="chip" data-q="${esc(p)}">${esc(p)}</button>`).join("");
+    $("stratChips").querySelectorAll(".chip").forEach((btn) => {
+      btn.onclick = () => { openChat(); $("chatInput").value = btn.getAttribute("data-q") || ""; $("chatInput").focus(); };
+    });
+  } catch (e) {}
+}
+function bubble(role, text, meta) {
+  const d = document.createElement("div");
+  d.className = "bubble " + role;
+  d.innerHTML = `<span class="meta">${esc(meta || role)}</span>${esc(text || "")}`;
+  return d;
+}
+function openChat() { $("chatPanel").classList.add("open"); }
+function closeChat() { $("chatPanel").classList.remove("open"); }
+async function loadChat() {
+  try {
+    const data = await (await fetch("/api/chat", { cache: "no-store" })).json();
+    const box = $("chatMsgs");
+    box.innerHTML = "";
+    (data.messages || []).forEach((m) => {
+      box.appendChild(bubble(m.role, m.text, m.role === "assistant" ? ("hermes · " + (m.source || "brain")) : "you"));
+    });
+    if (!(data.messages || []).length) {
+      box.appendChild(bubble("assistant", "I am Hermes. Ask what would flip the call to look: same coin, open rails, paper inventory, live book after fees. Paper only.", "hermes"));
+    }
+    box.scrollTop = box.scrollHeight;
+  } catch (e) {}
+}
+async function sendChat(text) {
+  const msg = String(text || "").trim();
+  if (!msg) return;
+  const box = $("chatMsgs");
+  const sendBtn = $("chatSend");
+  const input = $("chatInput");
+  box.appendChild(bubble("user", msg, "you"));
+  box.scrollTop = box.scrollHeight;
+  input.value = "";
+  sendBtn.disabled = true;
+  sendBtn.textContent = "…";
+  const thinking = bubble("assistant", "Reading the live board…", "hermes");
+  box.appendChild(thinking);
+  box.scrollTop = box.scrollHeight;
+  try {
+    const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: msg }) });
+    const data = await res.json();
+    thinking.remove();
+    if (data.assistant) box.appendChild(bubble("assistant", data.assistant.text, "hermes · " + (data.source || "brain")));
+    else box.appendChild(bubble("assistant", "No reply. Try again.", "hermes"));
+    if (data.posture) $("stratPosture").textContent = data.posture;
+  } catch (e) {
+    thinking.remove();
+    box.appendChild(bubble("assistant", "Chat offline — is the scanner running on this machine?", "hermes"));
+  }
+  sendBtn.disabled = false;
+  sendBtn.textContent = "Send";
+  box.scrollTop = box.scrollHeight;
+}
+$("chatToggle").onclick = () => { openChat(); loadChat(); };
+$("chatClose").onclick = closeChat;
+$("chatForm").onsubmit = (ev) => { ev.preventDefault(); sendChat($("chatInput").value); };
+async function tick() {
+  try { render(await (await fetch("/api/state", { cache: "no-store" })).json()); }
+  catch (e) { $("mode").textContent = "offline"; }
+  brain();
+  fetchStrategy();
+  fetchBots();
+}
+async function fetchBots() {
+  const box = $("botList");
+  if (!box) return;
+  try {
+    const data = await (await fetch("/api/bots", { cache: "no-store" })).json();
+    const bots = data.bots || [];
+    $("botsCount").textContent = String(bots.length) + " · paper";
+    $("botsTitle").textContent = bots.length ? (bots.length + " on the roster") : "No bots yet";
+    box.innerHTML = bots.length
+      ? bots.map((b) => `<article class="rec-card"><b>${esc(b.name || "")}</b><p>${esc(b.status || "off")} · ${esc(b.job || "No job yet")}</p><p>${esc(b.watches || "")}</p><p>${esc(b.note || "Paper only. No orders.")}</p></article>`).join("")
+      : "<p class='route'>Add a bot to bots.json and it shows up here. Each card is one arb bot: what it watches, whether it is off or paper, and the rule it follows. Orders stay off.</p>";
+  } catch (e) {
+    $("botsTitle").textContent = "Roster offline";
+    box.innerHTML = "<p class='route'>Bot roster did not load. Is the scanner running?</p>";
+  }
+}
+tick();
+loadChat();
+setInterval(tick, 1500);
+</script>
+</body>
+</html>

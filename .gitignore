@@ -7,10 +7,11 @@ brain.json
 journal.jsonl
 route_memory.json
 config.json
-board.html
-board-simple.html
-board-v2.html
-board-v3.html
-board-digest.html
+chat.jsonl
+bots.json
+logs/
+data/
+*.log
 .DS_Store
 Thumbs.db
+
