@@ -1,4 +1,4 @@
-# Paper crypto arb scanner
+# Crypto arb scanner
 
 Local, paper-only scanner for cross-exchange spatial arbitrage. Same-coin rails, inventory, Hermes brain hook. No orders. No API keys.
 
